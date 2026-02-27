@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 应用主题 -->
+    <style name="Theme.小梨密码" parent="android:Theme.Material.Light.NoActionBar">
+        <!-- 主题色 -->
+        <item name="android:colorPrimary">@color/pear_green</item>
+        <item name="android:colorPrimaryDark">@color/pear_green_dark</item>
+        <item name="android:colorAccent">@color/teal_primary</item>
+        
+        <!-- 窗口背景 -->
+        <item name="android:windowBackground">@color/background_light</item>
+        
+        <!-- 状态栏 -->
+        <item name="android:statusBarColor">@color/pear_green</item>
+        <item name="android:windowLightStatusBar">false</item>
+        
+        <!-- 导航栏 -->
+        <item name="android:navigationBarColor">@color/background_light</item>
+        <item name="android:windowLightNavigationBar">true</item>
+    </style>
+</resources>

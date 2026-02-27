@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 
+    备份规则 - 小梨密码
+    
+    安全说明：
+    1. 本应用为离线密码管理器，不支持云端备份
+    2. 数据库使用SQLCipher加密，无法通过常规备份恢复
+    3. 密钥存储于Android Keystore，与设备绑定
+    
+    因此禁用所有备份功能，确保数据安全。
+-->
+<full-backup-content>
+    <!-- 不备份任何数据 -->
+</full-backup-content>

@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 主色调 - 梨绿色系 -->
+    <color name="pear_green">#FF8BC34A</color>
+    <color name="pear_green_dark">#FF689F38</color>
+    <color name="pear_green_light">#FFDCEDC8</color>
+    
+    <!-- 辅助色 -->
+    <color name="teal_primary">#FF009688</color>
+    <color name="teal_dark">#FF00796B</color>
+    <color name="teal_light">#FFB2DFDB</color>
+    
+    <!-- 背景色 -->
+    <color name="background_light">#FFFAFAFA</color>
+    <color name="surface_light">#FFFFFFFF</color>
+    <color name="background_dark">#FF121212</color>
+    <color name="surface_dark">#FF1E1E1E</color>
+    
+    <!-- 文字颜色 -->
+    <color name="text_primary_light">#FF212121</color>
+    <color name="text_secondary_light">#FF757575</color>
+    <color name="text_primary_dark">#FFFFFFFF</color>
+    <color name="text_secondary_dark">#FFB0B0B0</color>
+    
+    <!-- 功能色 -->
+    <color name="error_red">#FFE53935</color>
+    <color name="success_green">#FF43A047</color>
+    <color name="warning_yellow">#FFFDD835</color>
+    <color name="info_blue">#FF1E88E5</color>
+    
+    <!-- 分类颜色 -->
+    <color name="category_social">#FF2196F3</color>
+    <color name="category_finance">#FF4CAF50</color>
+    <color name="category_work">#FFFF9800</color>
+    <color name="category_other">#FF9E9E9E</color>
+</resources>

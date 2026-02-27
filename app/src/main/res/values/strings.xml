@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">小梨密码</string>
+    
+    <!-- 通用 -->
+    <string name="confirm">确认</string>
+    <string name="cancel">取消</string>
+    <string name="delete">删除</string>
+    <string name="save">保存</string>
+    <string name="copy">复制</string>
+    <string name="back">返回</string>
+    
+    <!-- 认证页面 -->
+    <string name="auth_title">验证身份</string>
+    <string name="auth_subtitle">使用指纹或面部识别解锁</string>
+    <string name="auth_description">请验证您的身份以访问密码管理器</string>
+    <string name="master_password_hint">主密码</string>
+    <string name="verify">验证</string>
+    <string name="use_biometric">使用生物识别</string>
+    <string name="first_launch_title">欢迎使用小梨密码</string>
+    <string name="set_master_password">设置主密码</string>
+    <string name="password_requirement">6位以上数字或字母组合</string>
+    <string name="confirm_password">确认密码</string>
+    <string name="data_warning">⚠️ 数据仅保存在本机，卸载或清除数据将永久丢失</string>
+    
+    <!-- 密码列表 -->
+    <string name="password_list_title">小梨密码</string>
+    <string name="search_hint">搜索密码...</string>
+    <string name="empty_password_list">暂无密码</string>
+    <string name="add_password_hint">点击右下角按钮添加</string>
+    <string name="all_categories">全部</string>
+    
+    <!-- 分类 -->
+    <string name="category_social">社交账号</string>
+    <string name="category_finance">金融银行</string>
+    <string name="category_work">工作相关</string>
+    <string name="category_other">其他</string>
+    
+    <!-- 添加密码 -->
+    <string name="add_password_title">添加密码</string>
+    <string name="title_hint">标题 *</string>
+    <string name="title_example">例如：微信、支付宝</string>
+    <string name="username_hint">账号 *</string>
+    <string name="username_placeholder">用户名/邮箱/手机号</string>
+    <string name="password_hint">密码 *</string>
+    <string name="password_placeholder">输入或生成密码</string>
+    <string name="generate_password">生成密码</string>
+    <string name="show_password">显示密码</string>
+    <string name="hide_password">隐藏密码</string>
+    <string name="category_label">分类</string>
+    <string name="url_hint">网址（可选）</string>
+    <string name="url_placeholder">https://</string>
+    <string name="note_hint">备注（可选）</string>
+    <string name="note_placeholder">其他信息...</string>
+    
+    <!-- 密码详情 -->
+    <string name="password_detail_title">密码详情</string>
+    <string name="account_label">账号</string>
+    <string name="password_label">密码</string>
+    <string name="url_label">网址</string>
+    <string name="note_label">备注</string>
+    <string name="delete_password">删除密码</string>
+    <string name="delete_confirm_title">确认删除</string>
+    <string name="delete_confirm_message">确定要删除这个密码吗？此操作不可恢复。</string>
+    <string name="password_not_found">密码不存在</string>
+    
+    <!-- 剪贴板检测 -->
+    <string name="clipboard_detected">检测到账号密码</string>
+    <string name="save_to_manager">保存到密码管理器</string>
+    <string name="ignore">忽略</string>
+    <string name="dont_ask_again">不再提示</string>
+    
+    <!-- 错误提示 -->
+    <string name="error_invalid_password">密码格式不正确</string>
+    <string name="error_password_mismatch">两次输入的密码不一致</string>
+    <string name="error_save_failed">保存失败</string>
+    <string name="error_load_failed">加载失败</string>
+    <string name="error_delete_failed">删除失败</string>
+    <string name="error_auth_failed">认证失败</string>
+</resources>

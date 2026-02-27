@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    数据提取规则 - 小梨密码
+    
+    安全说明：
+    1. 禁止云端备份
+    2. 禁止设备间传输
+    3. 所有数据仅保存在本地加密数据库
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <!-- 不备份到云端 -->
+    </cloud-backup>
+    <device-transfer>
+        <!-- 不支持设备间传输 -->
+    </device-transfer>
+</data-extraction-rules>
