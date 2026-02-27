@@ -186,8 +186,7 @@ AES-256-GCM解密密码字段
 1. **克隆项目**
 
 ```bash
-git clone https://github.com/yourusername/xiaoli-password.git
-cd xiaoli-password
+git clone https://github.com/chengzeli7/Codebook.git
 ```
 
 2. **使用Android Studio打开**
