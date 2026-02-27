@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.lcz.passwordmanager.domain.model.Category
 import com.lcz.passwordmanager.domain.model.PasswordItem
+import com.lcz.passwordmanager.service.ClipboardMonitor
 import com.lcz.passwordmanager.ui.theme.*
 import com.lcz.passwordmanager.ui.viewmodel.PasswordListViewModel
 
@@ -32,6 +33,7 @@ import com.lcz.passwordmanager.ui.viewmodel.PasswordListViewModel
 fun PasswordListScreen(
     onAddPassword: () -> Unit,
     onPasswordClick: (String) -> Unit,
+    clipboardMonitor: ClipboardMonitor? = null,
     viewModel: PasswordListViewModel = hiltViewModel()
 ) {
     val passwordList by viewModel.passwordList.collectAsState()
@@ -39,16 +41,80 @@ fun PasswordListScreen(
     val selectedCategory by viewModel.selectedCategory.collectAsState()
     val errorMessage by viewModel.error.collectAsState()
     
+    // 监听剪贴板检测结果
+    val detectedCredentials by clipboardMonitor?.detectedCredentials?.collectAsState() ?: remember { mutableStateOf(null) }
+    
+    // 弹窗状态
+    var showCredentialDialog by remember { mutableStateOf(false) }
+    var pendingCredentials by remember { mutableStateOf<ClipboardMonitor.Credentials?>(null) }
+    
+    // 监听剪贴板变化，显示弹窗
+    LaunchedEffect(detectedCredentials) {
+        if (detectedCredentials != null) {
+            pendingCredentials = detectedCredentials
+            showCredentialDialog = true
+        }
+    }
+    
     errorMessage?.let { message ->
         LaunchedEffect(message) {
             viewModel.clearError()
         }
     }
     
+    // 弹窗
+    if (showCredentialDialog && pendingCredentials != null) {
+        val credentials = pendingCredentials!!
+        AlertDialog(
+            onDismissRequest = { 
+                showCredentialDialog = false
+                clipboardMonitor?.clearDetectedCredentials()
+            },
+            title = { Text("检测到账号密码") },
+            text = { 
+                Text(buildString {
+                    append("是否保存以下账号密码？\n\n")
+                    if (credentials.username.isNotEmpty()) {
+                        append("账号: ${credentials.username}\n")
+                    }
+                    append("密码: ${credentials.password}")
+                })
+            },
+            confirmButton = {
+                TextButton(onClick = { 
+                    showCredentialDialog = false
+                    // 保存到剪贴板监控器，供添加页面读取
+                    clipboardMonitor?.setDetectedCredentials(credentials)
+                    onAddPassword()
+                }) {
+                    Text("保存")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { 
+                    showCredentialDialog = false
+                    clipboardMonitor?.ignoreCurrentContent(credentials.rawText)
+                }) {
+                    Text("忽略")
+                }
+            }
+        )
+    }
+    
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
-                title = { Text("小梨密码") }
+                title = { Text("小梨密码") },
+                actions = {
+                    // 测试按钮
+                    if (clipboardMonitor != null) {
+                        TextButton(onClick = { 
+                            clipboardMonitor.checkClipboardWithMock("qq\n账号 1233\n密码 1231231")
+                        }) {
+                            Text("测试")
+                        }
+                    }
+                }
             )
         },
         floatingActionButton = {

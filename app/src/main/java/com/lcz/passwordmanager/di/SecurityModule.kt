@@ -5,6 +5,7 @@ import com.lcz.passwordmanager.security.BiometricAuthManager
 import com.lcz.passwordmanager.security.DatabaseKeyManager
 import com.lcz.passwordmanager.security.EncryptionManager
 import com.lcz.passwordmanager.security.MasterPasswordManager
+import com.lcz.passwordmanager.service.ClipboardMonitor
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -52,5 +53,13 @@ object SecurityModule {
         @ApplicationContext context: Context
     ): DatabaseKeyManager {
         return DatabaseKeyManager(context)
+    }
+
+    @Provides
+    @Singleton
+    fun provideClipboardMonitor(
+        @ApplicationContext context: Context
+    ): ClipboardMonitor {
+        return ClipboardMonitor(context)
     }
 }
