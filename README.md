@@ -1,7 +1,7 @@
 # 小梨密码 - 离线密码管理器
 
 <p align="center">
-  <strong>完全离线的本地密码管理器</strong>
+  <strong>小梨密码</strong>
 </p>
 <p align="center">
   零网络传输 + AES-256加密 + 智能剪贴板捕获
@@ -186,8 +186,7 @@ AES-256-GCM解密密码字段
 1. **克隆项目**
 
 ```bash
-git clone https://github.com/yourusername/xiaoli-password.git
-cd xiaoli-password
+git clone https://github.com/chengzeli7/Codebook.git
 ```
 
 2. **使用Android Studio打开**
