@@ -1,7 +1,7 @@
 # 小梨密码 - 离线密码管理器
 
 <p align="center">
-  <img src="app/src/main/res/mipmap-xxxhdpi/ic_launcher.png" alt="小梨密码" width="120"/>
+   <strong>小梨密码</strong>
 </p>
 
 <p align="center">
