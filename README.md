@@ -1,11 +1,10 @@
 # 小梨密码 - 离线密码管理器
 
 <p align="center">
-  <img src="app/src/main/res/mipmap-xxxhdpi/ic_launcher.png" alt="小梨密码" width="120"/>
+  <strong>完全离线的本地密码管理器</strong>
 </p>
-
 <p align="center">
-  <strong>完全离线的本地密码管理器，零网络传输 + AES-256加密 + 智能剪贴板捕获</strong>
+  零网络传输 + AES-256加密 + 智能剪贴板捕获
 </p>
 
 <p align="center">
