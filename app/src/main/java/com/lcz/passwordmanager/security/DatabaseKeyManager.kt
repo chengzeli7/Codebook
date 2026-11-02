@@ -2,10 +2,7 @@ package com.lcz.passwordmanager.security
 
 import android.content.Context
 import android.content.SharedPreferences
-import android.security.keystore.KeyGenParameterSpec
-import android.security.keystore.KeyProperties
-import androidx.security.crypto.EncryptedSharedPreferences
-import androidx.security.crypto.MasterKey
+import java.security.GeneralSecurityException
 import java.security.SecureRandom
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -15,13 +12,15 @@ import javax.inject.Singleton
  * 
  * 职责：
  * 1. 生成和管理SQLCipher数据库加密密钥
- * 2. 使用EncryptedSharedPreferences安全存储密钥
+ * 2. 经 Keystore AES-GCM 加密后保存密钥，随应用卸载删除
  * 3. 支持密钥轮换和恢复
  * 
  * 安全架构：
  * - 数据库密钥：随机生成的256位密钥，用于SQLCipher
- * - 主密钥：存储于Keystore，用于加密SharedPreferences
- * - 密钥层次：Keystore主密钥 -> EncryptedSharedPreferences -> 数据库密钥
+ * - 存储位置：SharedPreferences 文件中保存的是 Keystore 加密后的信封，
+ *   磁盘上不存在明文密钥。
+ *   注：Jetpack Security 的 EncryptedSharedPreferences 自 1.1.0 起已废弃，
+ *   因此改为 Keystore 自管的 AES-256-GCM 封装（[KeystoreCipher]）。
  * 
  * @author lcz
  * @since 1.0.0
@@ -41,28 +40,35 @@ class DatabaseKeyManager @Inject constructor(
     }
     
     /**
-     * 加密的SharedPreferences实例
-     * 使用AES-256加密，密钥存储于Keystore
+     * 安全存储实例
      */
     private val securePrefs: SharedPreferences by lazy {
-        createEncryptedSharedPreferences()
+        context.getSharedPreferences(PREFS_FILE, Context.MODE_PRIVATE)
     }
-    
-    /**
-     * 创建加密的SharedPreferences
-     */
-    private fun createEncryptedSharedPreferences(): SharedPreferences {
-        val masterKey = MasterKey.Builder(context)
-            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-            .build()
-        
-        return EncryptedSharedPreferences.create(
-            context,
-            PREFS_FILE,
-            masterKey,
-            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-        )
+
+    private val keystoreCipher: KeystoreCipher by lazy { KeystoreCipher() }
+
+    private fun readSecureString(prefKey: String): String? {
+        val stored = securePrefs.getString(prefKey, null) ?: return null
+        if (!KeystoreCipher.isEnvelope(stored)) {
+            // 兼容旧版本遗留的明文值：立即加密并改写
+            val migrated = keystoreCipher.encrypt(stored)
+            securePrefs.edit().putString(prefKey, migrated).apply()
+            return stored
+        }
+        return try {
+            keystoreCipher.decrypt(stored)
+        } catch (e: GeneralSecurityException) {
+            // 密钥丢失或被篡改：按“未保存”处理，后续会生成新密钥
+            android.util.Log.e("DatabaseKeyManager", "解密 $prefKey 失败", e)
+            null
+        }
+    }
+
+    private fun writeSecureString(prefKey: String, value: String) {
+        securePrefs.edit()
+            .putString(prefKey, keystoreCipher.encrypt(value))
+            .apply()
     }
     
     /**
@@ -71,16 +77,14 @@ class DatabaseKeyManager @Inject constructor(
      * @return SQLCipher数据库密钥（字符串形式）
      */
     fun getOrCreateDatabaseKey(): String {
-        val existingKey = securePrefs.getString(KEY_DB_PASSPHRASE, null)
+        val existingKey = readSecureString(KEY_DB_PASSPHRASE)
         
         return if (existingKey != null) {
             existingKey
         } else {
             // 生成新的随机密钥
             val newKey = generateSecureRandomKey()
-            securePrefs.edit()
-                .putString(KEY_DB_PASSPHRASE, newKey)
-                .apply()
+            writeSecureString(KEY_DB_PASSPHRASE, newKey)
             newKey
         }
     }
@@ -89,7 +93,7 @@ class DatabaseKeyManager @Inject constructor(
      * 获取数据库密钥（如果不存在返回null）
      */
     fun getDatabaseKey(): String? {
-        return securePrefs.getString(KEY_DB_PASSPHRASE, null)
+        return readSecureString(KEY_DB_PASSPHRASE)
     }
     
     /**
@@ -98,9 +102,7 @@ class DatabaseKeyManager @Inject constructor(
      */
     fun regenerateDatabaseKey(): String {
         val newKey = generateSecureRandomKey()
-        securePrefs.edit()
-            .putString(KEY_DB_PASSPHRASE, newKey)
-            .apply()
+        writeSecureString(KEY_DB_PASSPHRASE, newKey)
         return newKey
     }
     
@@ -123,9 +125,10 @@ class DatabaseKeyManager @Inject constructor(
      * @param salt 随机盐值
      */
     fun saveMasterPasswordSalt(salt: ByteArray) {
-        securePrefs.edit()
-            .putString(KEY_MASTER_PASSWORD_SALT, android.util.Base64.encodeToString(salt, android.util.Base64.NO_WRAP))
-            .apply()
+        writeSecureString(
+            KEY_MASTER_PASSWORD_SALT,
+            android.util.Base64.encodeToString(salt, android.util.Base64.NO_WRAP)
+        )
     }
     
     /**
@@ -133,7 +136,7 @@ class DatabaseKeyManager @Inject constructor(
      * @return 盐值，不存在返回null
      */
     fun getMasterPasswordSalt(): ByteArray? {
-        val saltString = securePrefs.getString(KEY_MASTER_PASSWORD_SALT, null)
+        val saltString = readSecureString(KEY_MASTER_PASSWORD_SALT)
         return saltString?.let {
             android.util.Base64.decode(it, android.util.Base64.NO_WRAP)
         }

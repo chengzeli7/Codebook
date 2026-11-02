@@ -1,11 +1,17 @@
 package com.lcz.passwordmanager.security
 
 import android.content.Context
+import android.os.Build
+import android.security.keystore.KeyGenParameterSpec
+import android.security.keystore.KeyProperties
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
 import kotlinx.coroutines.suspendCancellableCoroutine
+import java.security.KeyStore
+import java.security.UnrecoverableKeyException
+import javax.crypto.KeyGenerator
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.coroutines.resume
@@ -26,7 +32,17 @@ class BiometricAuthManager @Inject constructor(
     private val context: Context
 ) {
     
+    companion object {
+        private const val BIOMETRIC_AUTH_BINDING_KEY = "biometric_auth_binding_key"
+    }
+    
     private val biometricManager = BiometricManager.from(context)
+    
+    /**
+     * 设备凭证自上次生物识别后是否未被修改。
+     * lazy 求值：Keystore 可能抛异常，放主线程初始化会导致启动崩溃。
+     */
+    private val deviceCredentialUnchanged: Boolean by lazy { checkDeviceCredentialUnchanged() }
     
     /**
      * 检查生物识别可用性
@@ -68,6 +84,13 @@ class BiometricAuthManager @Inject constructor(
         description: String = "请验证您的身份以访问密码管理器"
     ): AuthResult = suspendCancellableCoroutine { continuation ->
         
+        // 密钥未设置生物识别绑定，仅校验生物特征可通过“新录入指纹”绕过，
+        // 因此必须再确认设备凭证（PIN/图案/密码）未被其他人修改
+        if (!deviceCredentialUnchanged) {
+            continuation.resume(AuthResult.Error("设备的锁屏密码已变更，请使用主密码解锁"))
+            return@suspendCancellableCoroutine
+        }
+        
         val executor = ContextCompat.getMainExecutor(context)
         
         val callback = object : BiometricPrompt.AuthenticationCallback() {
@@ -98,20 +121,88 @@ class BiometricAuthManager @Inject constructor(
         
         val prompt = BiometricPrompt(activity, executor, callback)
         
-        val promptInfo = BiometricPrompt.PromptInfo.Builder()
-            .setTitle(title)
-            .setSubtitle(subtitle)
-            .setDescription(description)
-            .setAllowedAuthenticators(
-                BiometricManager.Authenticators.BIOMETRIC_STRONG or
-                BiometricManager.Authenticators.DEVICE_CREDENTIAL
-            )
-            .build()
-        
-        prompt.authenticate(promptInfo)
+        prompt.authenticate(buildPromptInfo(title, subtitle, description))
         
         continuation.invokeOnCancellation {
             prompt.cancelAuthentication()
+        }
+    }
+    
+    /**
+     * 构建认证弹窗配置。
+     * 
+     * androidx.biometric 1.1.0 对认证器组合有硬性限制：
+     * - API 30+ 可单独使用 [BiometricManager.Authenticators.BIOMETRIC_STRONG]，
+     *   且该组合与 setNegativeButtonText 互斥；
+     * - API 24-29 设置 BIOMETRIC_STRONG 时系统会隐式注入 DEVICE_CREDENTIAL，
+     *   此时调用 setNegativeButtonText 会抛 IllegalArgumentException（部分 ROM 上为 NPE）。
+     */
+    private fun buildPromptInfo(
+        title: String,
+        subtitle: String,
+        description: String
+    ): BiometricPrompt.PromptInfo {
+        val builder = BiometricPrompt.PromptInfo.Builder()
+            .setTitle(title)
+            .setSubtitle(subtitle)
+            .setDescription(description)
+        // 两种版本都只声明生物特征：API 30+ 单独使用 BIOMETRIC_STRONG；
+        // API 24-29 由系统隐式补齐设备凭证。负按钮仅在 API 30+ 可用。
+        builder.setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            builder.setNegativeButtonText("取消")
+        }
+        return builder.build()
+    }
+    
+    /**
+     * 校验设备凭证（锁屏密码）自上次使用生物识别后未被修改。
+     * 创建带 setUserAuthenticationRequired 的 Keystore 密钥，锁屏指纹/PIN/图案变化时系统会使其失效，
+     * 此后必须改用主密码解锁，并在下次设置主密码时重新绑定。
+     */
+    private fun checkDeviceCredentialUnchanged(): Boolean {
+        val keyStore = loadKeyStore() ?: return true
+        if (keyStore.containsAlias(BIOMETRIC_AUTH_BINDING_KEY)) {
+            return try {
+                keyStore.getEntry(BIOMETRIC_AUTH_BINDING_KEY, null) != null
+            } catch (e: UnrecoverableKeyException) {
+                false
+            }
+        }
+        return createDeviceCredentialBinding()
+    }
+    
+    private fun createDeviceCredentialBinding(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            // Keystore 的 setUserAuthenticationRequired 从 API 26 起可用
+            return true
+        }
+        return try {
+            val keyGenerator = KeyGenerator.getInstance(
+                KeyProperties.KEY_ALGORITHM_AES,
+                "AndroidKeyStore"
+            )
+            val spec = KeyGenParameterSpec.Builder(
+                BIOMETRIC_AUTH_BINDING_KEY,
+                KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT
+            )
+                .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+                .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+                .setUserAuthenticationRequired(true)
+                .build()
+            keyGenerator.init(spec)
+            keyGenerator.generateKey()
+            true
+        } catch (e: Exception) {
+            false
+        }
+    }
+    
+    private fun loadKeyStore(): KeyStore? {
+        return try {
+            KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+        } catch (e: Exception) {
+            null
         }
     }
     

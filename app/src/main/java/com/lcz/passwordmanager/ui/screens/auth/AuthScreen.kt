@@ -23,7 +23,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.lcz.passwordmanager.security.BiometricAuthManager
 import com.lcz.passwordmanager.ui.viewmodel.AuthViewModel
 
@@ -62,8 +62,8 @@ fun AuthScreen(
         when (authState) {
             is AuthViewModel.AuthState.FirstLaunch -> {
                 iOSFirstLaunchScreen(
-                    onSetPassword = { password ->
-                        viewModel.setMasterPassword(password)
+                    onSetPassword = { password, onResult ->
+                        viewModel.setMasterPassword(password, onResult)
                     },
                     errorMessage = errorMessage
                 )
@@ -95,7 +95,7 @@ fun AuthScreen(
  */
 @Composable
 private fun iOSFirstLaunchScreen(
-    onSetPassword: (String) -> Unit,
+    onSetPassword: (String, (Boolean) -> Unit) -> Unit,
     errorMessage: String?
 ) {
     var password by remember { mutableStateOf("") }
@@ -103,6 +103,8 @@ private fun iOSFirstLaunchScreen(
     var passwordVisible by remember { mutableStateOf(false) }
     var confirmPasswordVisible by remember { mutableStateOf(false) }
     var showError by remember { mutableStateOf(false) }
+    // 主密码派生在后台执行，期间禁用重复提交
+    var isSettingPassword by remember { mutableStateOf(false) }
     val focusManager = LocalFocusManager.current
     
     Column(
@@ -184,7 +186,7 @@ private fun iOSFirstLaunchScreen(
                 onDone = {
                     focusManager.clearFocus()
                     if (password == confirmPassword && password.length >= 6) {
-                        onSetPassword(password)
+                        onSetPassword(password) { isSettingPassword = false }
                     } else {
                         showError = true
                     }
@@ -211,7 +213,10 @@ private fun iOSFirstLaunchScreen(
             onClick = {
                 focusManager.clearFocus()
                 if (password == confirmPassword && password.length >= 6) {
-                    onSetPassword(password)
+                    if (!isSettingPassword) {
+                        isSettingPassword = true
+                        onSetPassword(password) { isSettingPassword = false }
+                    }
                 } else {
                     showError = true
                 }
@@ -257,6 +262,8 @@ private fun iOSAuthRequiredScreen(
     val context = LocalContext.current
     var password by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
+    // 密码派生在后台执行，期间禁用重复提交
+    var isVerifying by remember { mutableStateOf(false) }
     val focusManager = LocalFocusManager.current
     val activity = context as? androidx.fragment.app.FragmentActivity
     
@@ -344,7 +351,7 @@ private fun iOSAuthRequiredScreen(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Divider(
+                HorizontalDivider(
                     modifier = Modifier.weight(1f),
                     color = MaterialTheme.colorScheme.outlineVariant
                 )
@@ -354,7 +361,7 @@ private fun iOSAuthRequiredScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = 16.dp)
                 )
-                Divider(
+                HorizontalDivider(
                     modifier = Modifier.weight(1f),
                     color = MaterialTheme.colorScheme.outlineVariant
                 )
@@ -375,7 +382,10 @@ private fun iOSAuthRequiredScreen(
             keyboardActions = KeyboardActions(
                 onDone = {
                     focusManager.clearFocus()
-                    viewModel.verifyMasterPassword(password)
+                    if (!isVerifying) {
+                        isVerifying = true
+                        viewModel.verifyMasterPassword(password) { isVerifying = false }
+                    }
                 }
             ),
             modifier = Modifier.fillMaxWidth()
@@ -398,7 +408,10 @@ private fun iOSAuthRequiredScreen(
         Button(
             onClick = {
                 focusManager.clearFocus()
-                viewModel.verifyMasterPassword(password)
+                if (!isVerifying) {
+                    isVerifying = true
+                    viewModel.verifyMasterPassword(password) { isVerifying = false }
+                }
             },
             modifier = Modifier
                 .fillMaxWidth()
