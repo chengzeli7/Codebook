@@ -27,8 +27,10 @@ object SecurityModule {
 
     @Provides
     @Singleton
-    fun provideEncryptionManager(): EncryptionManager {
-        return EncryptionManager()
+    fun provideEncryptionManager(
+        @ApplicationContext context: Context
+    ): EncryptionManager {
+        return EncryptionManager(context)
     }
 
     @Provides

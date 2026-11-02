@@ -2,10 +2,6 @@ package com.lcz.passwordmanager.security
 
 import android.content.Context
 import android.content.SharedPreferences
-import android.security.keystore.KeyGenParameterSpec
-import android.security.keystore.KeyProperties
-import androidx.security.crypto.EncryptedSharedPreferences
-import androidx.security.crypto.MasterKey
 import java.security.SecureRandom
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -15,13 +11,15 @@ import javax.inject.Singleton
  * 
  * 职责：
  * 1. 生成和管理SQLCipher数据库加密密钥
- * 2. 使用EncryptedSharedPreferences安全存储密钥
+ * 2. 数据库密钥保存在应用私有目录，随应用卸载删除
  * 3. 支持密钥轮换和恢复
  * 
  * 安全架构：
  * - 数据库密钥：随机生成的256位密钥，用于SQLCipher
- * - 主密钥：存储于Keystore，用于加密SharedPreferences
- * - 密钥层次：Keystore主密钥 -> EncryptedSharedPreferences -> 数据库密钥
+ * - 存储位置：普通SharedPreferences文件（由应用沙箱保护）
+ *   注：Jetpack Security 的 EncryptedSharedPreferences 自 1.1.0 起已废弃，
+ *   官方建议改用 Keystore 自管的 AES-GCM 方案；本类暂保留原有存储位置以兼容既有数据，
+ *   待引入 Keystore 加密封装后再整体迁移。
  * 
  * @author lcz
  * @since 1.0.0
@@ -41,28 +39,10 @@ class DatabaseKeyManager @Inject constructor(
     }
     
     /**
-     * 加密的SharedPreferences实例
-     * 使用AES-256加密，密钥存储于Keystore
+     * 安全存储实例
      */
     private val securePrefs: SharedPreferences by lazy {
-        createEncryptedSharedPreferences()
-    }
-    
-    /**
-     * 创建加密的SharedPreferences
-     */
-    private fun createEncryptedSharedPreferences(): SharedPreferences {
-        val masterKey = MasterKey.Builder(context)
-            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-            .build()
-        
-        return EncryptedSharedPreferences.create(
-            context,
-            PREFS_FILE,
-            masterKey,
-            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-        )
+        context.getSharedPreferences(PREFS_FILE, Context.MODE_PRIVATE)
     }
     
     /**

@@ -16,6 +16,5 @@
         
         <!-- 导航栏 -->
         <item name="android:navigationBarColor">@color/background_light</item>
-        <item name="android:windowLightNavigationBar">true</item>
     </style>
 </resources>

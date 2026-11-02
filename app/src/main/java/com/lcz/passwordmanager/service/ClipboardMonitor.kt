@@ -8,6 +8,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import java.security.MessageDigest
 import java.util.regex.Pattern
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -50,6 +51,7 @@ class ClipboardMonitor @Inject constructor(
     /**
      * 忽略的剪贴板内容（用户选择忽略的内容）
      */
+    // 由主线程访问，保持 java.util.Set 而非线程不安全的自定义集合
     private val ignoredContents = mutableSetOf<String>()
 
     /**
@@ -104,52 +106,31 @@ class ClipboardMonitor @Inject constructor(
 
         try {
             val text = mockText ?: run {
-                Log.d(TAG, "开始读取剪贴板...")
-                
+                // 注意：剪贴板内容属于敏感数据，禁止写入日志
                 val clip = clipboardManager.primaryClip
-                Log.d(TAG, "clip: $clip, itemCount: ${clip?.itemCount}")
-                
                 if (clip == null || clip.itemCount == 0) {
-                    Log.d(TAG, "剪贴板为空或无内容")
                     return
-                }
-                
-                for (i in 0 until clip.itemCount) {
-                    val item = clip.getItemAt(i)
-                    Log.d(TAG, "第${i}项: ${item.text}, mimeType: ${item.coerceToText(context)}")
                 }
                 
                 val item = clip.getItemAt(0)
                 val textContent = item.text?.toString()?.trim()
-                val coerceText = item.coerceToText(context).toString().trim()
-                
-                Log.d(TAG, "item.text: [$textContent]")
-                Log.d(TAG, "coerceToText: [$coerceText]")
-                
-                textContent ?: coerceText
+                textContent ?: item.coerceToText(context)?.toString()?.trim()
             }
 
             if (text.isNullOrBlank()) {
-                Log.d(TAG, "剪贴板内容为空")
                 return
             }
-            
-            Log.d(TAG, "检测到剪贴板内容: [$text]")
 
             // 检查是否已忽略
-            val textHash = text.hashCode().toString()
+            val textHash = ignoredKey(text)
             if (ignoredContents.contains(textHash)) {
-                Log.d(TAG, "内容已被忽略")
                 return
             }
 
             // 识别账号密码
             val credentials = extractCredentials(text)
             if (credentials != null) {
-                Log.d(TAG, "识别成功: username=${credentials.username}, password=${credentials.password}")
                 _detectedCredentials.value = credentials
-            } else {
-                Log.d(TAG, "未识别到账号密码")
             }
 
         } catch (e: Exception) {
@@ -166,10 +147,9 @@ class ClipboardMonitor @Inject constructor(
         // 预处理：统一换行符为空格，方便匹配
         val normalizedText = text.replace("\n", " ").replace("\r", " ")
         
-        for ((index, pattern) in patterns.withIndex()) {
+        for (pattern in patterns) {
             val matcher = pattern.matcher(normalizedText)
             if (matcher.find()) {
-                Log.d(TAG, "正则 $index 匹配成功, groupCount=${matcher.groupCount()}")
                 return when (matcher.groupCount()) {
                     2 -> Credentials(
                         username = matcher.group(1) ?: "",
@@ -187,10 +167,9 @@ class ClipboardMonitor @Inject constructor(
         }
         
         // 尝试原始文本匹配
-        for ((index, pattern) in patterns.withIndex()) {
+        for (pattern in patterns) {
             val matcher = pattern.matcher(text)
             if (matcher.find()) {
-                Log.d(TAG, "正则(原始) $index 匹配成功, groupCount=${matcher.groupCount()}")
                 return when (matcher.groupCount()) {
                     2 -> Credentials(
                         username = matcher.group(1) ?: "",
@@ -227,13 +206,22 @@ class ClipboardMonitor @Inject constructor(
      * 忽略当前内容（30分钟内不再提示）
      */
     fun ignoreCurrentContent(rawText: String) {
-        ignoredContents.add(rawText.hashCode().toString())
+        // 使用 SHA-256 摘要，避免 String.hashCode 只有 32 位、
+        // 他人可构造同哈希的敏感内容使“忽略”失效
+        val key = ignoredKey(rawText)
+        ignoredContents.add(key)
         clearDetectedCredentials()
 
         // 30分钟后移除忽略标记
         android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-            ignoredContents.remove(rawText.hashCode().toString())
+            ignoredContents.remove(key)
         }, 30 * 60 * 1000)
+    }
+    
+    private fun ignoredKey(rawText: String): String {
+        return MessageDigest.getInstance("SHA-256")
+            .digest(rawText.toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(it) }
     }
 
     /**

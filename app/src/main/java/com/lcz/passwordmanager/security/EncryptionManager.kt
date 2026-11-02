@@ -1,14 +1,21 @@
 package com.lcz.passwordmanager.security
 
+import android.content.Context
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
 import java.nio.ByteBuffer
+import java.security.GeneralSecurityException
 import java.security.KeyStore
+import java.security.MessageDigest
+import java.security.SecureRandom
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
+import javax.crypto.SecretKeyFactory
 import javax.crypto.spec.GCMParameterSpec
+import javax.crypto.spec.PBEKeySpec
+import javax.crypto.spec.SecretKeySpec
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -25,7 +32,9 @@ import javax.inject.Singleton
  * @since 1.0.0
  */
 @Singleton
-class EncryptionManager @Inject constructor() {
+class EncryptionManager @Inject constructor(
+    private val context: Context
+) {
     
     companion object {
         /**
@@ -62,10 +71,28 @@ class EncryptionManager @Inject constructor() {
          * IV长度（字节）
          */
         private const val IV_LENGTH = 12
+
+        /**
+         * 数据密钥主密码信封的存储位置
+         */
+        private const val PREFS_NAME = "key_wrap_prefs"
+        private const val KEY_WRAPPED_DATA_KEY = "wrapped_data_key"
+        private const val KEY_WRAP_SALT = "wrap_salt"
+
+        /**
+         * 主密码信封派生参数（仅用于加密 Keystore 中的密钥，不是密码哈希本身）
+         */
+        private const val WRAP_ALGORITHM = "PBKDF2WithHmacSHA256"
+        private const val WRAP_ITERATIONS = 100_000
+        private const val WRAP_KEY_LENGTH_BITS = 256
+        private const val WRAP_SALT_LENGTH = 16
     }
     
-    private val keyStore: KeyStore = KeyStore.getInstance(ANDROID_KEYSTORE).apply {
-        load(null)
+    /**
+     * 惰性打开 Keystore：KeyStore 不可用时应在使用处报错，而不是让 Singleton 构造直接崩溃
+     */
+    private val keyStore: KeyStore by lazy {
+        KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
     }
     
     init {
@@ -148,6 +175,81 @@ class EncryptionManager @Inject constructor() {
         return String(plaintext, Charsets.UTF_8)
     }
     
+    /**
+     * 用主密码重新加密 Keystore 中的数据密钥，保存为“主密码信封”。
+     * 
+     * 目的：密钥文件虽然存放在私有目录，但仅靠 Keystore 时，设备上的指纹/生物特征
+     * 可能被本地利用；绑定主密码后，没有主密码就无法还原数据密钥。
+     * 每次主密码验证成功后调用（等同于重新加密一次）。
+     * 
+     * 注意：JVM 端（单元测试）没有 AndroidKeyStore，调用方需容错。
+     *
+     * @param masterPassword 已验证的主密码
+     */
+    fun rebindWithMasterPassword(masterPassword: String) {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val salt = ByteArray(WRAP_SALT_LENGTH).also { SecureRandom().nextBytes(it) }
+        val wrappingKey = deriveKey(masterPassword, salt)
+
+        val rawKey = getKey().encoded
+        val cipher = Cipher.getInstance("$ALGORITHM/$BLOCK_MODE/$PADDING")
+        cipher.init(Cipher.ENCRYPT_MODE, SecretKeySpec(wrappingKey, ALGORITHM))
+        val ciphertext = cipher.doFinal(rawKey)
+        rawKey.fill(0)
+
+        val payload = ByteBuffer.allocate(IV_LENGTH + ciphertext.size)
+            .put(cipher.iv)
+            .put(ciphertext)
+            .array()
+        prefs.edit()
+            .putString(KEY_WRAP_SALT, Base64.encodeToString(salt, Base64.NO_WRAP))
+            .putString(KEY_WRAPPED_DATA_KEY, Base64.encodeToString(payload, Base64.NO_WRAP))
+            .apply()
+        wrappingKey.fill(0)
+    }
+
+    /**
+     * 使用主密码解开数据密钥信封。
+     * @return 是否成功（主密码错误或尚未绑定时为 false）
+     */
+    fun unwrapWithMasterPassword(masterPassword: String): Boolean {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val salt = prefs.getString(KEY_WRAP_SALT, null) ?: return false
+        val payload = prefs.getString(KEY_WRAPPED_DATA_KEY, null) ?: return false
+        return try {
+            val wrappingKey = deriveKey(
+                masterPassword,
+                Base64.decode(salt, Base64.NO_WRAP)
+            )
+            val data = Base64.decode(payload, Base64.NO_WRAP)
+            val cipher = Cipher.getInstance("$ALGORITHM/$BLOCK_MODE/$PADDING")
+            cipher.init(
+                Cipher.DECRYPT_MODE,
+                SecretKeySpec(wrappingKey, ALGORITHM),
+                GCMParameterSpec(GCM_TAG_LENGTH, data, 0, IV_LENGTH)
+            )
+            val rawKey = cipher.doFinal(data, IV_LENGTH, data.size - IV_LENGTH)
+            val sameAsKeystore = MessageDigest.isEqual(rawKey, getKey().encoded)
+            rawKey.fill(0)
+            wrappingKey.fill(0)
+            sameAsKeystore
+        } catch (e: GeneralSecurityException) {
+            // 主密码错误时 GCM 认证失败
+            false
+        }
+    }
+
+    private fun deriveKey(password: String, salt: ByteArray): ByteArray {
+        val chars = password.toCharArray()
+        val spec = PBEKeySpec(chars, salt, WRAP_ITERATIONS, WRAP_KEY_LENGTH_BITS)
+        return try {
+            SecretKeyFactory.getInstance(WRAP_ALGORITHM).generateSecret(spec).encoded
+        } finally {
+            spec.clearPassword()
+            chars.fill('\u0000')
+        }
+    }
+
     /**
      * 安全清除CharArray
      * 将数组填充为零，防止密码在内存中残留

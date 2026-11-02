@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+        浅色主题在 API 27+ 需要显式声明导航栏图标为深色，
+        放在 values-v27 中避免低版本解析到不存在的属性。
+    -->
+    <style name="Theme.小梨密码" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowLightNavigationBar">true</item>
+    </style>
+</resources>
