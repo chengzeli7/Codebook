@@ -171,7 +171,6 @@ class BiometricAuthManager @Inject constructor(
                 .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
                 .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
                 .setUserAuthenticationRequired(true)
-                .setInvalidatedByBiometricEnrollment(true)
                 .build()
             keyGenerator.init(spec)
             keyGenerator.generateKey()
