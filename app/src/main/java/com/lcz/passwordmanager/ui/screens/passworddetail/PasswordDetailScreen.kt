@@ -17,7 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.lcz.passwordmanager.domain.model.Category
 import com.lcz.passwordmanager.ui.theme.*
 import com.lcz.passwordmanager.ui.viewmodel.PasswordDetailViewModel
