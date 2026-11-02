@@ -55,11 +55,33 @@ class PasswordHashingTest {
     }
 
     @Test
+    fun deriveKeyBytes_handlesEmptyLongAndUnicodePasswords() {
+        val salt = ByteArray(16) { 3 }
+        // 空密码也能完成派生（格式校验会在入口处拒绝，这里只验证算法不抛异常）
+        assertTrue(manager.deriveKeyBytes("", salt).isNotEmpty())
+        assertTrue(manager.deriveKeyBytes("a".repeat(4096), salt).isNotEmpty())
+        assertTrue(manager.deriveKeyBytes("密码🔐 dengan ünïcode", salt).isNotEmpty())
+        // Unicode 密码按 UTF-8 处理：归一化形式不同即视为不同密码
+        assertFalse(
+            manager.deriveKeyBytes("é", salt).contentEquals(manager.deriveKeyBytes("e\u0301", salt))
+        )
+    }
+
+    @Test
     fun deriveKeyBytes_isNotPlainSha256() {
         val salt = ByteArray(16)
         val derived = manager.deriveKeyBytes("abc123", salt)
         val sha256 = java.security.MessageDigest.getInstance("SHA-256")
             .digest("abc123".toByteArray())
         assertFalse(derived.contentEquals(sha256))
+    }
+
+    @Test
+    fun deriveKeyBytes_samePasswordProducesDifferentHashesPerSalt() {
+        val saltA = ByteArray(16) { 7 }
+        val saltB = ByteArray(16) { 8 }
+        val a = manager.deriveKeyBytes("abc123", saltA)
+        val b = manager.deriveKeyBytes("abc123", saltB)
+        assertNotEquals(a.toList(), b.toList())
     }
 }

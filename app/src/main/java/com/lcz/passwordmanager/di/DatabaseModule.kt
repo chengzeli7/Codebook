@@ -3,6 +3,7 @@ package com.lcz.passwordmanager.di
 import android.content.Context
 import androidx.room.Room
 import com.lcz.passwordmanager.data.local.dao.PasswordDao
+import com.lcz.passwordmanager.data.local.database.LegacyDatabaseMigrator
 import com.lcz.passwordmanager.data.local.database.PasswordDatabase
 import com.lcz.passwordmanager.security.DatabaseKeyManager
 import dagger.Module
@@ -48,16 +49,28 @@ object DatabaseModule {
     @Singleton
     fun provideDatabase(
         @ApplicationContext context: Context,
-        keyManager: DatabaseKeyManager
+        keyManager: DatabaseKeyManager,
+        legacyMigrator: LegacyDatabaseMigrator
     ): PasswordDatabase {
+        val databaseFile = context.applicationContext.getDatabasePath(DATABASE_NAME)
+
+        // 旧版本库是普通 SQLite 文件，必须在 SQLCipher 打开前迁移，
+        // 否则会因“文件不是数据库”而无法读取用户的已有密码
+        val encrypted = legacyMigrator.migrateIfNeeded(databaseFile)
+
+        val builder = Room.databaseBuilder(
+            context.applicationContext,
+            PasswordDatabase::class.java,
+            DATABASE_NAME
+        )
+        if (!encrypted) {
+            // 迁移失败时回退为明文模式，避免用户数据不可用；下次启动会再次尝试迁移
+            return builder.build()
+        }
+
         val passphrase = keyManager.getOrCreateDatabaseKey().toByteArray()
         return try {
-            Room.databaseBuilder(
-                context.applicationContext,
-                PasswordDatabase::class.java,
-                DATABASE_NAME
-            ).openHelperFactory(SupportOpenHelperFactory(passphrase))
-                .build()
+            builder.openHelperFactory(SupportOpenHelperFactory(passphrase)).build()
         } finally {
             passphrase.wipe()
         }

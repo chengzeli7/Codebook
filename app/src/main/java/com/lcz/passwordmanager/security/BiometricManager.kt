@@ -121,20 +121,38 @@ class BiometricAuthManager @Inject constructor(
         
         val prompt = BiometricPrompt(activity, executor, callback)
         
-        val promptInfo = BiometricPrompt.PromptInfo.Builder()
-            .setTitle(title)
-            .setSubtitle(subtitle)
-            .setDescription(description)
-            .setConfirmationRequired(false)
-            .setNegativeButtonText("取消")
-            .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG)
-            .build()
-        
-        prompt.authenticate(promptInfo)
+        prompt.authenticate(buildPromptInfo(title, subtitle, description))
         
         continuation.invokeOnCancellation {
             prompt.cancelAuthentication()
         }
+    }
+    
+    /**
+     * 构建认证弹窗配置。
+     * 
+     * androidx.biometric 1.1.0 对认证器组合有硬性限制：
+     * - API 30+ 可单独使用 [BiometricManager.Authenticators.BIOMETRIC_STRONG]，
+     *   且该组合与 setNegativeButtonText 互斥；
+     * - API 24-29 设置 BIOMETRIC_STRONG 时系统会隐式注入 DEVICE_CREDENTIAL，
+     *   此时调用 setNegativeButtonText 会抛 IllegalArgumentException（部分 ROM 上为 NPE）。
+     */
+    private fun buildPromptInfo(
+        title: String,
+        subtitle: String,
+        description: String
+    ): BiometricPrompt.PromptInfo {
+        val builder = BiometricPrompt.PromptInfo.Builder()
+            .setTitle(title)
+            .setSubtitle(subtitle)
+            .setDescription(description)
+        // 两种版本都只声明生物特征：API 30+ 单独使用 BIOMETRIC_STRONG；
+        // API 24-29 由系统隐式补齐设备凭证。负按钮仅在 API 30+ 可用。
+        builder.setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            builder.setNegativeButtonText("取消")
+        }
+        return builder.build()
     }
     
     /**
